@@ -116,37 +116,61 @@ class PlaybackControls {
     constructor(wavesurferInstance) {
         this.wavesurfer = wavesurferInstance;
         this.controls = {
-            backward: document.querySelector('#file-select-area #backward'),
-            play: document.querySelector('#file-select-area #play'),
-            forward: document.querySelector('#file-select-area #forward'),
-            volumeSlider: document.querySelector('#file-select-area #volume-slider')
+            backward: document.querySelector('#backward'),
+            play: document.querySelector('#play'),
+            forward: document.querySelector('#forward'),
+            volumeSlider: document.querySelector('#volume-slider')
         };
 
         // Set click handlers
         if (this.controls.backward) {
-            this.controls.backward.onclick = () => { this.wavesurfer.skipBackward(); };
+            this.controls.backward.onclick = () => { 
+                this.wavesurfer.skip(-5); // Skip 5 seconds backward
+            };
         }
         if (this.controls.play) {
-            this.controls.play.onclick = () => { this.wavesurfer.playPause(); };
+            this.controls.play.onclick = () => { 
+                this.wavesurfer.playPause();
+                const icon = this.controls.play.querySelector('i');
+                if (icon) {
+                    icon.classList.toggle('play');
+                    icon.classList.toggle('pause');
+                }
+            };
         }
         if (this.controls.forward) {
-            this.controls.forward.onclick = () => { this.wavesurfer.skipForward(); };
+            this.controls.forward.onclick = () => { 
+                this.wavesurfer.skip(5); // Skip 5 seconds forward
+            };
         }
         if (this.controls.volumeSlider) {
             this.controls.volumeSlider.oninput = (e) => {
                 this.wavesurfer.setVolume(e.target.value);
             };
         }
+
+        // Update play button on wavesurfer events
+        this.wavesurfer.on('play', () => {
+            const icon = this.controls.play.querySelector('i');
+            if (icon) {
+                icon.classList.remove('play');
+                icon.classList.add('pause');
+            }
+        });
+
+        this.wavesurfer.on('pause', () => {
+            const icon = this.controls.play.querySelector('i');
+            if (icon) {
+                icon.classList.remove('pause');
+                icon.classList.add('play');
+            }
+        });
     }
 
     toggleEnabled(isEnabled) {
         Object.values(this.controls).forEach(control => {
             if (control) {
-                if (isEnabled) {
-                    control.removeAttribute('disabled');
-                } else {
-                    control.setAttribute('disabled', '');
-                }
+                control.disabled = !isEnabled;
             }
         });
     }

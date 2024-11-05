@@ -1,5 +1,6 @@
 import { AnalysisResults, toggleUploadDisplayHTML, PlaybackControls, showLoader, hideLoader, updateMetadata } from './viz.js';
 import { preprocess, shortenAudio } from './audioUtils.js';
+import { createWaveform } from './waveform.js';
 
 const AudioContext = window.AudioContext || window.webkitAudioContext;
 const audioCtx = new AudioContext();
@@ -47,6 +48,8 @@ dropArea.addEventListener('click', () => {
     dropInput.click();
 })
 
+let pitchWavesurfer;
+
 function processFileUpload(files) {
     if (files.length > 1) {
         alert("Only single-file uploads are supported currently");
@@ -59,31 +62,43 @@ function processFileUpload(files) {
             return;
         }
 
-        files[0].arrayBuffer().then((ab) => {
-            decodeFile(ab);
-            wavesurfer = toggleUploadDisplayHTML('display');
-            wavesurfer.loadBlob(file);
-            updateMetadata(file);
-            controls = new PlaybackControls(wavesurfer);
-            // Reset volume slider to default
-            const volumeSlider = document.querySelector('#volume-slider');
-            if (volumeSlider) {
-                volumeSlider.value = 1;
-                wavesurfer.setVolume(1);
-            }
-        }).catch(error => {
+        // Show loader immediately
+        showLoader();
+
+        // Start both processes in parallel
+        Promise.all([
+            // Process 1: Decode and analyze audio
+            files[0].arrayBuffer().then(ab => decodeFile(ab)),
+            
+            // Process 2: Create waveform visualization
+            files[0].arrayBuffer().then(ab => {
+                wavesurfer = createWaveform(file);
+
+                // Create controls first
+                const controlsTemplate = document.querySelector('#playback-controls');
+                const waveformContainer = document.querySelector('#waveform-container');
+                waveformContainer.appendChild(controlsTemplate.content.cloneNode(true));
+
+                // Update the file drop area to show "Load new audio" instead
+                const dropArea = document.querySelector('#file-drop-area');
+                dropArea.innerHTML = '<span>Load new audio</span>';
+                dropArea.style.height = '50px';
+
+                updateMetadata(file);
+                controls = new PlaybackControls(wavesurfer);
+            })
+        ]).catch(error => {
             console.error("Error processing file:", error);
-            alert("Error processing audio file. Please try another file.");
+            hideLoader();
+            alert("Error processing audio file. Please try again.");
         });
     }
 }
 
 function decodeFile(arrayBuffer) {
-    audioCtx.resume().then(() => {
-        audioCtx.decodeAudioData(arrayBuffer).then(async function handleDecodedAudio(audioBuffer) {
+    return audioCtx.resume().then(() => {
+        return audioCtx.decodeAudioData(arrayBuffer).then(async function handleDecodedAudio(audioBuffer) {
             console.info("Done decoding audio!");
-            
-            showLoader();
             
             const preprocessedAudio = preprocess(audioBuffer);
             await audioCtx.suspend();
@@ -92,13 +107,11 @@ function decodeFile(arrayBuffer) {
                 essentiaAnalysis = computeKeyBPM(preprocessedAudio);
             } else {
                 console.error("Essentia not initialized.");
-                alert("Essentia not initialized. Please try again later.");
-                hideLoader();
-                return;
+                throw new Error("Essentia not initialized");
             }
 
             // Reduce amount of audio to analyse
-            let audioData = shortenAudio(preprocessedAudio, KEEP_PERCENTAGE, true); // <-- TRIMMED start/end
+            let audioData = shortenAudio(preprocessedAudio, KEEP_PERCENTAGE, true);
 
             // Send for feature extraction
             createFeatureExtractionWorker();
@@ -109,11 +122,11 @@ function decodeFile(arrayBuffer) {
             audioData = null;
         }).catch(decodeError => {
             console.error("Decoding error:", decodeError);
-            alert("Error decoding audio file. Please try another file.");
+            throw decodeError;
         });
     }).catch(resumeError => {
         console.error("Audio context resume error:", resumeError);
-        alert("Error initializing audio context.");
+        throw resumeError;
     });
 }
 
@@ -191,7 +204,7 @@ function collectPredictions() {
                 console.error("essentiaAnalysis is undefined or missing 'bpm'.");
                 alert("Error processing audio file. Please try another file.");
                 hideLoader();
-                controls.toggleEnabled(false);
+                if (controls) controls.toggleEnabled(false);
                 return;
             }
             const allPredictions = {};
@@ -199,14 +212,14 @@ function collectPredictions() {
             resultsViz.updateMeters(allPredictions);
             resultsViz.updateValueBoxes(essentiaAnalysis);
             hideLoader();
-            controls.toggleEnabled(true);
+            if (controls) controls.toggleEnabled(true);
 
             inferenceResultPromises = [] // clear array
         }).catch((error) => {
             console.error("Error collecting predictions:", error);
             alert("Error collecting predictions.");
             hideLoader();
-            controls.toggleEnabled(false);
+            if (controls) controls.toggleEnabled(false);
         });
     }
 }
@@ -217,16 +230,70 @@ function toggleLoader() {
     loader.classList.toggle('active')
 }
 
+function renderPitchContour(frequencies, baseFrequency) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.querySelector('#pitch-waveform');
+    const width = container.clientWidth;
+    const height = container.clientHeight;
 
-window.onload = () => {
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.pointerEvents = 'none';
+
+    // Clear the canvas
+    ctx.clearRect(0, 0, width, height);
+
+    // Scale frequencies to fit the canvas width
+    const scaleX = width / frequencies.length;
+    const maxFreq = Math.max(...frequencies.filter(f => f > 0)) || baseFrequency;
+    const minFreq = Math.min(...frequencies.filter(f => f > 0)) || 0;
+    
+    // Draw the pitch contour
+    ctx.beginPath();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+
+    frequencies.forEach((freq, i) => {
+        if (freq > 0) {
+            const x = i * scaleX;
+            // Normalize frequency to canvas height
+            const y = height - ((freq - minFreq) / (maxFreq - minFreq)) * height;
+            
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+    });
+
+    ctx.stroke();
+
+    // Add the canvas to the container
+    container.appendChild(canvas);
+    
+    // Remove canvas when loading new audio
+    wavesurfer.once('load', () => canvas.remove());
+}
+
+window.onload = async () => {
     createInferenceWorkers();
-    EssentiaWASM().then((wasmModule) => {
+    
+    try {
+        const wasmModule = await EssentiaWASM();
         essentia = new wasmModule.EssentiaJS(false);
         essentia.arrayToVector = wasmModule.arrayToVector;
-    }).catch(error => {
+        console.log("Essentia initialized successfully");
+    } catch (error) {
         console.error("Error loading EssentiaWASM:", error);
         alert("Failed to load Essentia library.");
-    });
+    }
 };
 
 // voice instrumental close to 0 means instrumental

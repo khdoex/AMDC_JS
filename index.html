@@ -34,6 +34,10 @@
                         <span id="duration-value" class="metadata-value">--</span>
                     </div>
                 </div>
+                <div id="waveform-container">
+                    
+                    <div id="waveform"></div>
+                </div>
                 <div id="file-drop-area">
                     <span>Drop file here or click to upload</span>
                 </div>
@@ -123,8 +127,9 @@
             </div>
         </main>
     </div>
-    <!-- WaveSurfer.js for audio waveform -->
+    <!-- Add Timeline plugin before main wavesurfer -->
     <script src="https://unpkg.com/wavesurfer.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js/dist/plugin/wavesurfer.timeline.min.js"></script>
     <!-- Essentia.js for audio analysis -->
     <script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.0/dist/essentia-wasm.web.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.0/dist/essentia.js-core.js"></script>
@@ -137,19 +142,15 @@
         <div class="controls">
             <button id="backward" class="ui button tiny">
                 <i class="step backward icon"></i>
-                Backward
             </button>
             <button id="play" class="ui primary button tiny">
                 <i class="play icon"></i>
-                Play / Pause
             </button>
             <button id="forward" class="ui button tiny">
                 <i class="step forward icon"></i>
-                Forward
             </button>
-            <!-- Volume Slider -->
             <div class="volume-control">
-                <label for="volume-slider">Volume:</label>
+                <label for="volume-slider">Volume</label>
                 <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="1">
             </div>
         </div>
