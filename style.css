@@ -483,10 +483,9 @@ h1 {
 
 .zoom-control input[type="range"] {
     -webkit-appearance: none;
+    appearance: none;
     background: var(--medium-gray);
     border-radius: 5px;
-    height: 5px;
-    outline: none;
 }
 
 .zoom-control input[type="range"]::-webkit-slider-thumb {
