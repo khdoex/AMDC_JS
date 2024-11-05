@@ -53,23 +53,6 @@ function processFileUpload(files) {
         // Show loader immediately
         showLoader();
 
-        // Remove drop area completely after first upload
-        const dropArea = document.querySelector('#file-drop-area');
-        if (dropArea) {
-            dropArea.remove();
-        }
-
-        // Add refresh button at the bottom of the page
-        const refreshButton = document.createElement('button');
-        refreshButton.className = 'ui button';
-        refreshButton.style.margin = '2rem auto';
-        refreshButton.style.display = 'block';
-        refreshButton.innerHTML = '↻ Load different song';
-        refreshButton.onclick = () => window.location.reload();
-        
-        // Add the button to the end of main
-        document.querySelector('#main').appendChild(refreshButton);
-
         // Start both processes in parallel
         Promise.all([
             // Process 1: Decode and analyze audio
@@ -83,6 +66,21 @@ function processFileUpload(files) {
                 const controlsTemplate = document.querySelector('#playback-controls');
                 const waveformContainer = document.querySelector('#waveform-container');
                 waveformContainer.appendChild(controlsTemplate.content.cloneNode(true));
+
+                // Update the file drop area to show "Load new audio" instead
+                const dropArea = document.querySelector('#file-drop-area');
+                dropArea.innerHTML = '<span>Load new audio</span>';
+                dropArea.style.height = '50px';
+
+                // Add refresh note
+                const refreshNote = document.createElement('div');
+                refreshNote.className = 'refresh-note';
+                refreshNote.textContent = 'Want to use another song? Just refresh the page';
+                refreshNote.style.textAlign = 'center';
+                refreshNote.style.color = '#999';
+                refreshNote.style.fontSize = '0.9rem';
+                refreshNote.style.marginTop = '10px';
+                dropArea.appendChild(refreshNote);
 
                 updateMetadata(file);
                 controls = new PlaybackControls(wavesurfer);
