@@ -19,9 +19,7 @@ const modelNames = [
     'mood_electronic', 
     'mood_acoustic',
     'danceability', 
-
     'tonal_atonal',
-
 ];
 let inferenceResultPromises = [];
 
@@ -32,10 +30,11 @@ let controls;
 let pitchWavesurfer;
 
 let essentiaInitialized = false;
+let modelsLoaded = false;
 
 function processFileUpload(files) {
-    if (!essentiaInitialized) {
-        alert("Please wait for audio analysis system to initialize...");
+    if (!essentiaInitialized || !modelsLoaded) {
+        alert("System is still initializing. Please wait...");
         return;
     }
 
@@ -177,24 +176,30 @@ function createFeatureExtractionWorker() {
 }
 
 function createInferenceWorkers() {
-    modelNames.forEach((n) => { 
-        inferenceWorkers[n] = new Worker('./src/inference.js');
-        inferenceWorkers[n].postMessage({
-            name: n
+    return Promise.all(modelNames.map((n) => {
+        return new Promise((resolve, reject) => {
+            inferenceWorkers[n] = new Worker('./src/inference.js');
+            inferenceWorkers[n].postMessage({ name: n });
+            inferenceWorkers[n].onmessage = function(msg) {
+                if (msg.data.status === 'loaded') {
+                    console.log(`${n} loaded and ready.`);
+                    resolve();
+                } else if (msg.data.predictions) {
+                    const preds = msg.data.predictions;
+                    // emit event to PredictionCollector object
+                    inferenceResultPromises.push(new Promise((res) => {
+                        res({ [n]: preds });
+                    }));
+                    collectPredictions();
+                    console.log(`${n} predictions: `, preds);
+                }
+            };
+            inferenceWorkers[n].onerror = function(error) {
+                console.error(`Error in worker ${n}:`, error);
+                reject(error);
+            };
         });
-        inferenceWorkers[n].onmessage = function listenToWorker(msg) {
-            // listen out for model output
-            if (msg.data.predictions) {
-                const preds = msg.data.predictions;
-                // emit event to PredictionCollector object
-                inferenceResultPromises.push(new Promise((res) => {
-                    res({ [n]: preds });
-                }));
-                collectPredictions();
-                console.log(`${n} predictions: `, preds);
-            }
-        };
-    });
+    }));
 }
 
 function collectPredictions() {
@@ -291,29 +296,34 @@ window.onload = async () => {
     dropArea.style.pointerEvents = 'none';
     dropArea.innerHTML = '<span>Initializing audio analysis system...</span>';
 
-    createInferenceWorkers();
-    
     try {
         const wasmModule = await EssentiaWASM();
         essentia = new wasmModule.EssentiaJS(false);
         essentia.arrayToVector = wasmModule.arrayToVector;
         console.log("Essentia initialized successfully");
         
-        // Enable drop area after initialization
+        // Create and wait for all inference workers to load
+        await createInferenceWorkers();
+        console.log("All inference workers loaded");
+
+        // Mark as initialized
         essentiaInitialized = true;
+        modelsLoaded = true;
+
+        // Enable drop area after all initializations
         dropArea.style.opacity = '1';
         dropArea.style.pointerEvents = 'auto';
         dropArea.innerHTML = '<span>Drop file here or click to upload</span>';
 
         // Add event listeners after initialization
         dropArea.addEventListener('dragover', (e) => { 
-            if (essentiaInitialized) {
+            if (essentiaInitialized && modelsLoaded) {
                 e.preventDefault();
             }
         });
 
         dropArea.addEventListener('drop', (e) => {
-            if (essentiaInitialized) {
+            if (essentiaInitialized && modelsLoaded) {
                 e.preventDefault();
                 const files = e.dataTransfer.files;
                 processFileUpload(files);
@@ -321,7 +331,7 @@ window.onload = async () => {
         });
 
         dropArea.addEventListener('click', () => {
-            if (essentiaInitialized) {
+            if (essentiaInitialized && modelsLoaded) {
                 const newDropInput = document.createElement('input');
                 newDropInput.setAttribute('type', 'file');
                 newDropInput.setAttribute('accept', 'audio/*');
@@ -335,10 +345,10 @@ window.onload = async () => {
         });
 
     } catch (error) {
-        console.error("Error loading EssentiaWASM:", error);
+        console.error("Initialization error:", error);
         dropArea.innerHTML = '<span>Error initializing audio analysis. Please refresh the page.</span>';
         dropArea.style.backgroundColor = '#ff4444';
-        alert("Failed to load Essentia library.");
+        alert("Failed to initialize the audio analysis system.");
     }
 };
 

@@ -136,3 +136,6 @@ onmessage = function listenToMainThread(msg) {
         modelPredict(msg.data.features);
     }
 };
+
+// After model loading is complete
+postMessage({ status: 'loaded' });
