@@ -29,28 +29,16 @@ const resultsViz = new AnalysisResults(modelNames);
 let wavesurfer;
 let controls;
 
-const dropInput = document.createElement('input');
-dropInput.setAttribute('type', 'file');
-dropInput.setAttribute('accept', 'audio/*');
-dropInput.addEventListener('change', (e) => {
-    e.preventDefault();
-    processFileUpload(dropInput.files);
-});
-
-const dropArea = document.querySelector('#file-drop-area');
-dropArea.addEventListener('dragover', (e) => { e.preventDefault() });
-dropArea.addEventListener('drop', (e) => {
-    e.preventDefault();
-    const files = e.dataTransfer.files;
-    processFileUpload(files);
-})
-dropArea.addEventListener('click', () => {
-    dropInput.click();
-})
-
 let pitchWavesurfer;
 
+let essentiaInitialized = false;
+
 function processFileUpload(files) {
+    if (!essentiaInitialized) {
+        alert("Please wait for audio analysis system to initialize...");
+        return;
+    }
+
     if (files.length > 1) {
         alert("Only single-file uploads are supported currently");
         throw Error("Multiple file upload attempted, cannot process.");
@@ -65,6 +53,23 @@ function processFileUpload(files) {
         // Show loader immediately
         showLoader();
 
+        // Remove drop area completely after first upload
+        const dropArea = document.querySelector('#file-drop-area');
+        if (dropArea) {
+            dropArea.remove();
+        }
+
+        // Add refresh button at the bottom of the page
+        const refreshButton = document.createElement('button');
+        refreshButton.className = 'ui button';
+        refreshButton.style.margin = '2rem auto';
+        refreshButton.style.display = 'block';
+        refreshButton.innerHTML = '↻ Load different song';
+        refreshButton.onclick = () => window.location.reload();
+        
+        // Add the button to the end of main
+        document.querySelector('#main').appendChild(refreshButton);
+
         // Start both processes in parallel
         Promise.all([
             // Process 1: Decode and analyze audio
@@ -78,11 +83,6 @@ function processFileUpload(files) {
                 const controlsTemplate = document.querySelector('#playback-controls');
                 const waveformContainer = document.querySelector('#waveform-container');
                 waveformContainer.appendChild(controlsTemplate.content.cloneNode(true));
-
-                // Update the file drop area to show "Load new audio" instead
-                const dropArea = document.querySelector('#file-drop-area');
-                dropArea.innerHTML = '<span>Load new audio</span>';
-                dropArea.style.height = '50px';
 
                 updateMetadata(file);
                 controls = new PlaybackControls(wavesurfer);
@@ -283,6 +283,14 @@ function renderPitchContour(frequencies, baseFrequency) {
 }
 
 window.onload = async () => {
+    // Get dropArea reference
+    const dropArea = document.querySelector('#file-drop-area');
+    
+    // Disable drop area initially
+    dropArea.style.opacity = '0.5';
+    dropArea.style.pointerEvents = 'none';
+    dropArea.innerHTML = '<span>Initializing audio analysis system...</span>';
+
     createInferenceWorkers();
     
     try {
@@ -290,8 +298,46 @@ window.onload = async () => {
         essentia = new wasmModule.EssentiaJS(false);
         essentia.arrayToVector = wasmModule.arrayToVector;
         console.log("Essentia initialized successfully");
+        
+        // Enable drop area after initialization
+        essentiaInitialized = true;
+        dropArea.style.opacity = '1';
+        dropArea.style.pointerEvents = 'auto';
+        dropArea.innerHTML = '<span>Drop file here or click to upload</span>';
+
+        // Add event listeners after initialization
+        dropArea.addEventListener('dragover', (e) => { 
+            if (essentiaInitialized) {
+                e.preventDefault();
+            }
+        });
+
+        dropArea.addEventListener('drop', (e) => {
+            if (essentiaInitialized) {
+                e.preventDefault();
+                const files = e.dataTransfer.files;
+                processFileUpload(files);
+            }
+        });
+
+        dropArea.addEventListener('click', () => {
+            if (essentiaInitialized) {
+                const newDropInput = document.createElement('input');
+                newDropInput.setAttribute('type', 'file');
+                newDropInput.setAttribute('accept', 'audio/*');
+                newDropInput.addEventListener('change', (e) => {
+                    e.preventDefault();
+                    processFileUpload(newDropInput.files);
+                    newDropInput.remove(); // Clean up the input after use
+                }, { once: true }); // Ensure the event listener is used only once
+                newDropInput.click();
+            }
+        });
+
     } catch (error) {
         console.error("Error loading EssentiaWASM:", error);
+        dropArea.innerHTML = '<span>Error initializing audio analysis. Please refresh the page.</span>';
+        dropArea.style.backgroundColor = '#ff4444';
         alert("Failed to load Essentia library.");
     }
 };
