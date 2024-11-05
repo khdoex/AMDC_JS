@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Audio Mood Analysis</title>
+    <meta name="description" content="Mood Audio Descriptors using Deep Learning Models">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Semantic UI for styling -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.css">
+    <!-- Our CSS (placed after Semantic UI to override its styles) -->
+    <link rel="stylesheet" href="style.css">
+    <!-- jQuery and Semantic UI JS -->
+    <script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.js"></script>
+</head>
+<body class="dark-theme">
+    <div class="page-container">
+        <header>
+            <h1>Mood Audio Analysis</h1>
+        </header>
+        <main id="main">
+            <div id="file-select-area">
+                <div id="metadata-container">
+                    <div class="metadata-item">
+                        <span class="metadata-label">Title:</span>
+                        <span id="title-value" class="metadata-value">--</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-label">Artist:</span>
+                        <span id="artist-value" class="metadata-value">--</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-label">Duration:</span>
+                        <span id="duration-value" class="metadata-value">--</span>
+                    </div>
+                </div>
+                <div id="file-drop-area">
+                    <span>Drop file here or click to upload</span>
+                </div>
+            </div>
+                <div id="results">
+                    <!-- Visualization Container -->
+                    <div id="visualization">
+                        <div id="classifiers">
+                            <!-- Classifier Elements -->
+                            <div id="mood_happy" class="classifier">
+                                <div class="classifier-value">Happy</div>
+                                <div class="classifier-meter">
+                                    <div class="classifier-fill"></div>
+                                    <div class="classifier-score">0.00</div>
+                                </div>
+                            </div>
+                            <div id="mood_sad" class="classifier">
+                                <div class="classifier-value">Sad</div>
+                                <div class="classifier-meter">
+                                    <div class="classifier-fill"></div>
+                                    <div class="classifier-score">0.00</div>
+                                </div>
+                            </div>
+                            <div id="mood_relaxed" class="classifier">
+                                <div class="classifier-value">Relaxed</div>
+                                <div class="classifier-meter">
+                                    <div class="classifier-fill"></div>
+                                    <div class="classifier-score">0.00</div>
+                                </div>
+                            </div>
+                            <div id="mood_aggressive" class="classifier">
+                                <div class="classifier-value">Aggressive</div>
+                                <div class="classifier-meter">
+                                    <div class="classifier-fill"></div>
+                                    <div class="classifier-score">0.00</div>
+                                </div>
+                            </div>
+                            <div id="mood_party" class="classifier">
+                                <div class="classifier-value">Party</div>
+                                <div class="classifier-meter">
+                                    <div class="classifier-fill"></div>
+                                    <div class="classifier-score">0.00</div>
+                                </div>
+                            </div>
+                            <div id="mood_electronic" class="classifier">
+                                <div class="classifier-value">Electronic</div>
+                                <div class="classifier-meter">
+                                    <div class="classifier-fill"></div>
+                                    <div class="classifier-score">0.00</div>
+                                </div>
+                            </div>
+                            <div id="mood_acoustic" class="classifier">
+                                <div class="classifier-value">Acoustic</div>
+                                <div class="classifier-meter">
+                                    <div class="classifier-fill"></div>
+                                    <div class="classifier-score">0.00</div>
+                                </div>
+                            </div>
+                            <div id="danceability" class="classifier">
+                                <div class="classifier-value">Danceability</div>
+                                <div class="classifier-meter">
+                                    <div class="classifier-fill"></div>
+                                    <div class="classifier-score">0.00</div>
+                                </div>
+                            </div>
+                            <div id="tonal_atonal" class="classifier">
+                                <div class="classifier-value">Tonal/Atonal</div>
+                                <div class="classifier-meter">
+                                    <div class="classifier-fill"></div>
+                                    <div class="classifier-score">0.00</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- BPM and Key Display -->
+                    <div id="bpm-and-key">
+                        <div id="bpm" class="row-container">
+                            <div class="tag">BPM</div>
+                            <div id="bpm-value">--</div>
+                        </div>
+                        <div id="key" class="row-container">
+                            <div class="tag">Key</div>
+                            <div id="key-value">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <!-- WaveSurfer.js for audio waveform -->
+    <script src="https://unpkg.com/wavesurfer.js"></script>
+    <!-- Essentia.js for audio analysis -->
+    <script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.0/dist/essentia-wasm.web.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.0/dist/essentia.js-core.js"></script>
+    <!-- Add jsmediatags library before your main.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+    <!-- Your main JavaScript file -->
+    <script src="src/main.js" type="module" async defer></script>
+    <!-- Playback Controls Template -->
+    <template id="playback-controls">
+        <div class="controls">
+            <button id="backward" class="ui button tiny">
+                <i class="step backward icon"></i>
+                Backward
+            </button>
+            <button id="play" class="ui primary button tiny">
+                <i class="play icon"></i>
+                Play / Pause
+            </button>
+            <button id="forward" class="ui button tiny">
+                <i class="step forward icon"></i>
+                Forward
+            </button>
+            <button id="mute" class="ui button tiny">
+                <i class="volume off icon"></i>
+                Toggle Mute
+            </button>
+        </div>
+    </template>
+    <!-- Move the loader outside of results -->
+    <div id="loader" class="ui dimmer disabled">
+        <div class="ui large text loader">Analyzing audio... Please wait</div>
+    </div>
+</body>
+</html>
