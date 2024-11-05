@@ -42,8 +42,16 @@ class AnalysisResults {
     }
 
     updateValueBoxes(essentiaAnalysis) {
+        if (!essentiaAnalysis || typeof essentiaAnalysis.bpm === 'undefined') {
+            console.warn("essentiaAnalysis is undefined or missing 'bpm'.");
+            this.bpmBox.textContent = 'N/A';
+            this.keyBox.textContent = 'N/A';
+            return;
+        }
         const stringBpm = essentiaAnalysis.bpm.toString();
-        const formattedBpm = stringBpm.slice(0, stringBpm.indexOf('.') + 2); // Keep 1 decimal place
+        const formattedBpm = stringBpm.includes('.') 
+            ? stringBpm.slice(0, stringBpm.indexOf('.') + 2) // Keep 1 decimal place
+            : stringBpm;
         this.bpmBox.textContent = formattedBpm;
         this.keyBox.textContent = `${essentiaAnalysis.keyData.key} ${essentiaAnalysis.keyData.scale}`;
     }
@@ -106,25 +114,28 @@ function toggleUploadDisplayHTML(mode) {
 
 class PlaybackControls {
     constructor(wavesurferInstance) {
+        this.wavesurfer = wavesurferInstance;
         this.controls = {
             backward: document.querySelector('#file-select-area #backward'),
             play: document.querySelector('#file-select-area #play'),
             forward: document.querySelector('#file-select-area #forward'),
-            mute: document.querySelector('#file-select-area #mute')
+            volumeSlider: document.querySelector('#file-select-area #volume-slider')
         };
 
         // Set click handlers
         if (this.controls.backward) {
-            this.controls.backward.onclick = () => { wavesurferInstance.skipBackward() };
+            this.controls.backward.onclick = () => { this.wavesurfer.skipBackward(); };
         }
         if (this.controls.play) {
-            this.controls.play.onclick = () => { wavesurferInstance.playPause() };
+            this.controls.play.onclick = () => { this.wavesurfer.playPause(); };
         }
         if (this.controls.forward) {
-            this.controls.forward.onclick = () => { wavesurferInstance.skipForward() };
+            this.controls.forward.onclick = () => { this.wavesurfer.skipForward(); };
         }
-        if (this.controls.mute) {
-            this.controls.mute.onclick = () => { wavesurferInstance.toggleMute() };
+        if (this.controls.volumeSlider) {
+            this.controls.volumeSlider.oninput = (e) => {
+                this.wavesurfer.setVolume(e.target.value);
+            };
         }
     }
 

@@ -47,8 +47,6 @@ dropArea.addEventListener('click', () => {
     dropInput.click();
 })
 
-
-
 function processFileUpload(files) {
     if (files.length > 1) {
         alert("Only single-file uploads are supported currently");
@@ -67,6 +65,12 @@ function processFileUpload(files) {
             wavesurfer.loadBlob(file);
             updateMetadata(file);
             controls = new PlaybackControls(wavesurfer);
+            // Reset volume slider to default
+            const volumeSlider = document.querySelector('#volume-slider');
+            if (volumeSlider) {
+                volumeSlider.value = 1;
+                wavesurfer.setVolume(1);
+            }
         }).catch(error => {
             console.error("Error processing file:", error);
             alert("Error processing audio file. Please try another file.");
@@ -81,25 +85,36 @@ function decodeFile(arrayBuffer) {
             
             showLoader();
             
-            const prepocessedAudio = preprocess(audioBuffer);
+            const preprocessedAudio = preprocess(audioBuffer);
             await audioCtx.suspend();
 
             if (essentia) {
-                essentiaAnalysis = computeKeyBPM(prepocessedAudio);
+                essentiaAnalysis = computeKeyBPM(preprocessedAudio);
+            } else {
+                console.error("Essentia not initialized.");
+                alert("Essentia not initialized. Please try again later.");
+                hideLoader();
+                return;
             }
 
-            // reduce amount of audio to analyse
-            let audioData = shortenAudio(prepocessedAudio, KEEP_PERCENTAGE, true); // <-- TRIMMED start/end
+            // Reduce amount of audio to analyse
+            let audioData = shortenAudio(preprocessedAudio, KEEP_PERCENTAGE, true); // <-- TRIMMED start/end
 
-            // send for feature extraction
+            // Send for feature extraction
             createFeatureExtractionWorker();
 
             featureExtractionWorker.postMessage({
                 audio: audioData.buffer
             }, [audioData.buffer]);
             audioData = null;
-        })
-    })
+        }).catch(decodeError => {
+            console.error("Decoding error:", decodeError);
+            alert("Error decoding audio file. Please try another file.");
+        });
+    }).catch(resumeError => {
+        console.error("Audio context resume error:", resumeError);
+        alert("Error initializing audio context.");
+    });
 }
 
 function computeKeyBPM(audioSignal) {
@@ -133,9 +148,13 @@ function createFeatureExtractionWorker() {
         if (msg.data.features) {
             modelNames.forEach((n) => {
                 // send features off to each of the models
-                inferenceWorkers[n].postMessage({
-                    features: msg.data.features
-                });
+                if (inferenceWorkers[n]) { // Ensure worker exists
+                    inferenceWorkers[n].postMessage({
+                        features: msg.data.features
+                    });
+                } else {
+                    console.warn(`Inference worker for "${n}" not found.`);
+                }
             });
             msg.data.features = null;
         }
@@ -154,7 +173,7 @@ function createInferenceWorkers() {
             // listen out for model output
             if (msg.data.predictions) {
                 const preds = msg.data.predictions;
-                // emmit event to PredictionCollector object
+                // emit event to PredictionCollector object
                 inferenceResultPromises.push(new Promise((res) => {
                     res({ [n]: preds });
                 }));
@@ -166,17 +185,29 @@ function createInferenceWorkers() {
 }
 
 function collectPredictions() {
-    if (inferenceResultPromises.length == modelNames.length) {
+    if (inferenceResultPromises.length === modelNames.length) {
         Promise.all(inferenceResultPromises).then((predictions) => {
+            if (!essentiaAnalysis || typeof essentiaAnalysis.bpm === 'undefined') {
+                console.error("essentiaAnalysis is undefined or missing 'bpm'.");
+                alert("Error processing audio file. Please try another file.");
+                hideLoader();
+                controls.toggleEnabled(false);
+                return;
+            }
             const allPredictions = {};
             Object.assign(allPredictions, ...predictions);
             resultsViz.updateMeters(allPredictions);
             resultsViz.updateValueBoxes(essentiaAnalysis);
             hideLoader();
-            controls.toggleEnabled(true)
+            controls.toggleEnabled(true);
 
             inferenceResultPromises = [] // clear array
-        })
+        }).catch((error) => {
+            console.error("Error collecting predictions:", error);
+            alert("Error collecting predictions.");
+            hideLoader();
+            controls.toggleEnabled(false);
+        });
     }
 }
 
@@ -192,10 +223,13 @@ window.onload = () => {
     EssentiaWASM().then((wasmModule) => {
         essentia = new wasmModule.EssentiaJS(false);
         essentia.arrayToVector = wasmModule.arrayToVector;
-    })
+    }).catch(error => {
+        console.error("Error loading EssentiaWASM:", error);
+        alert("Failed to load Essentia library.");
+    });
 };
 
-// voice instrumental close to 0 means intrumental
+// voice instrumental close to 0 means instrumental
 // gender close to 0 means female
 // fs_loop_ds removed 
 // tonal_atonal close to 0 means atonal

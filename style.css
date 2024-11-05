@@ -361,3 +361,29 @@ h1 {
     margin-top: 1rem;
 }
 
+/* Volume Control Styles */
+.volume-control {
+    display: flex;
+    align-items: center;
+    margin-left: 1rem;
+}
+
+.volume-control label {
+    margin-right: 0.5rem;
+    color: #fff;
+}
+
+#volume-slider {
+    width: 100px;
+}
+
+/* Optional: Hide loader by default */
+#loader.disabled {
+    display: none;
+}
+
+#loader.active {
+    display: block;
+    /* Add your loader styling here */
+}
+
